@@ -41,6 +41,11 @@ __FBSDID("$FreeBSD$");
 #include "opt_acpi.h"
 #include "ibft.h"
 
+/* Search for the iBFT in low memory */
+#if defined(__amd64__) || defined(__i386__)
+#define	IBFT_FIND
+#endif
+
 /* location of iBFT */
 uint8_t *ibft_signature = NULL;
 
@@ -557,16 +562,24 @@ ibft_acpi_lookup(void)
 int
 ibft_init(void)
 {
-	int error, need_unmap;
-	uint8_t *vaddr, *p;
+	int error;
+	uint8_t *p;
+#ifdef IBFT_FIND
+	uint8_t *vaddr;
 	uint32_t paddr;
+	int need_unmap;
+#endif
+
 	p = ibft_acpi_lookup();
 	if (p != NULL) {
 		if (ibft_verbose) {
 			printf("found iBFT via ACPI\n");
 		}
+#ifdef IBFT_FIND
 		need_unmap = 0;
+#endif
 	}
+#ifdef IBFT_FIND
 	else {
 		/* search signature */
 		vaddr = pmap_mapdev((vm_paddr_t)0, (vm_size_t)IBFT_HIGH_ADDR);
@@ -584,6 +597,7 @@ ibft_init(void)
 			}
 		}
 	}
+#endif
 	if (p != NULL) {
 		/* retrieve offsets */
 		error = ibft_parse_structure(p);
@@ -591,10 +605,12 @@ ibft_init(void)
 			if (ibft_verbose) {
 				printf("iBFT error\n");
 			}
+#ifdef IBFT_FIND
 			if (need_unmap == 1) {
 				pmap_unmapdev((vm_offset_t)vaddr,
 					(vm_size_t)IBFT_HIGH_ADDR);
 			}
+#endif
 			return (error);
 		}
 		ibft_signature = p;
